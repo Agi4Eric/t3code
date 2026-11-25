@@ -1,3 +1,63 @@
+> [!IMPORTANT]
+> **Unofficial Privacy-Hardened Fork / 非官方隐私安全精简版**
+>
+> This repository (`Agi4Eric/t3code`) is an **unofficial**, independently maintained privacy-hardened fork of [`pingdotgg/t3code`](https://github.com/pingdotgg/t3code). It is **not affiliated with, endorsed by, or officially associated with T3 Tools, Inc.**
+>
+> 本仓库（`Agi4Eric/t3code`）是基于 [`pingdotgg/t3code`](https://github.com/pingdotgg/t3code) 维护的**非官方隐私安全精简版**，与 T3 Tools, Inc. 无关，亦未获得其官方背书。
+
+### 安全与隐私改动说明（中文）
+
+相较于上游官方版本，本 Fork 移除了以下全部数据收集、外发追踪、后台凭据读取及上游自动更新行为（共修改 15 个核心文件，编译产物经验证不含任何 `ingest.t3.codes` 或 PostHog Key）：
+
+1. **移除全部产品遥测与 PostHog 数据上报（原默认开启）**
+   - [`apps/server/src/telemetry/AnalyticsService.ts`](./apps/server/src/telemetry/AnalyticsService.ts)：彻底移除硬编码的 PostHog Key、向 `https://ingest.t3.codes/batch/` 批量上报事件（心跳、对话轮次、模型/Token 用量、功能点击、MCP 调用等）以及后台定时刷新协程，全部替换为纯空实现（no-op）。
+   - [`apps/server/src/telemetry/Identify.ts`](./apps/server/src/telemetry/Identify.ts)：停止在本地生成/持久化匿名追踪文件 `anonymous-id`，停止读取 `CLOUD_LINKED_USER_ID` 上报安装所有者信息。
+   - [`apps/web/src/connection/platform.ts`](./apps/web/src/connection/platform.ts)、[`apps/server/src/ws.ts`](./apps/server/src/ws.ts)：停止在浏览器 `localStorage` 生成 `t3code:analytics-device-id`，并停止在 WebSocket 握手阶段读取或上报客户端设备/账户哈希。
+2. **彻底关闭对话内容与轨迹上传通道（Agent Feedback）**
+   - [`apps/server/src/feedback/FeedbackStore.ts`](./apps/server/src/feedback/FeedbackStore.ts)：永久禁用 `agent.feedback` 提交与外发逻辑，确保对话轮次轨迹或消息文本不会以反馈报告形式离开本机。
+3. **关闭 Relay OTLP 链路追踪外发（Axiom）**
+   - [`packages/shared/src/otelEnvironment.ts`](./packages/shared/src/otelEnvironment.ts)、[`apps/server/src/cloud/relayTracing.ts`](./apps/server/src/cloud/relayTracing.ts)、[`apps/server/src/cloud/publicConfig.ts`](./apps/server/src/cloud/publicConfig.ts)、[`apps/web/src/cloud/publicConfig.ts`](./apps/web/src/cloud/publicConfig.ts)、[`apps/desktop/src/ipc/methods/window.ts`](./apps/desktop/src/ipc/methods/window.ts)：全链路禁用向外部 Axiom OTLP 端点发送 Relay 连接追踪。
+4. **禁用后台读取外部工具钥匙串与凭据的额度探测**
+   - [`apps/server/src/provider/antigravityUsageLimits.ts`](./apps/server/src/provider/antigravityUsageLimits.ts)：禁用后台读取系统钥匙串（`gemini:antigravity`）、`acp_token.json`、`antigravity-oauth-token` 及调用 Google OAuth / `userinfo` / `cloudcode-pa` 的额度探针。
+   - [`apps/server/src/provider/claudeResetCredits.ts`](./apps/server/src/provider/claudeResetCredits.ts)：禁用后台读取 `.credentials.json` 与 `~/.claude.json` 查询重置额度的逻辑。
+5. **禁用远程拉取上游模型清单与上游自动更新**
+   - [`apps/server/src/provider/ModelManifest.ts`](./apps/server/src/provider/ModelManifest.ts)：仅使用随代码内置的 `BUNDLED_MODEL_MANIFEST`，不再在后台请求 `raw.githubusercontent.com/pingdotgg/t3code/.../model-manifest.json`。
+   - [`apps/desktop/src/updates/DesktopUpdatePolicy.ts`](./apps/desktop/src/updates/DesktopUpdatePolicy.ts)、[`apps/server/src/cloud/selfUpdate.ts`](./apps/server/src/cloud/selfUpdate.ts)：禁用桌面端与服务端针对上游官方发布的自动更新，防止被覆盖回官方带遥测的版本。
+
+---
+
+### Privacy & Security Changes (English)
+
+Compared to upstream `pingdotgg/t3code`, this fork strips all telemetry, conversation/feedback uploads, background credential/keychain probes, remote manifest fetches, and upstream auto-updates (compiled bundles verified free of `ingest.t3.codes` and PostHog keys):
+
+1. **Product Analytics & Identity Tracking Removed (Previously Opt-Out / On by Default)**
+   - [`apps/server/src/telemetry/AnalyticsService.ts`](./apps/server/src/telemetry/AnalyticsService.ts): Removed hardcoded PostHog key, `https://ingest.t3.codes/batch/` HTTP batching, and background flush loop; replaced with a strict no-op service.
+   - [`apps/server/src/telemetry/Identify.ts`](./apps/server/src/telemetry/Identify.ts): Disabled persistent `anonymous-id` file generation and reading `CLOUD_LINKED_USER_ID` for owner telemetry.
+   - [`apps/web/src/connection/platform.ts`](./apps/web/src/connection/platform.ts), [`apps/server/src/ws.ts`](./apps/server/src/ws.ts): Removed `localStorage["t3code:analytics-device-id"]` generation and client owner/device hash collection on WebSocket connections.
+2. **Conversation / Feedback Upload Channel Disabled**
+   - [`apps/server/src/feedback/FeedbackStore.ts`](./apps/server/src/feedback/FeedbackStore.ts): Permanently disabled `agent.feedback` submission and outbound delivery so no turn outlines or conversation text can leave the machine.
+3. **Relay OTLP Tracing (Axiom) Disabled**
+   - [`packages/shared/src/otelEnvironment.ts`](./packages/shared/src/otelEnvironment.ts), [`apps/server/src/cloud/relayTracing.ts`](./apps/server/src/cloud/relayTracing.ts), [`apps/server/src/cloud/publicConfig.ts`](./apps/server/src/cloud/publicConfig.ts), [`apps/web/src/cloud/publicConfig.ts`](./apps/web/src/cloud/publicConfig.ts), [`apps/desktop/src/ipc/methods/window.ts`](./apps/desktop/src/ipc/methods/window.ts): Permanently disabled external relay tracing across server, web, and desktop.
+4. **Background Credential / Keychain Quota Probes Disabled**
+   - [`apps/server/src/provider/antigravityUsageLimits.ts`](./apps/server/src/provider/antigravityUsageLimits.ts): Disabled reading OS keyring (`gemini:antigravity`), `acp_token.json`, and `antigravity-oauth-token`, as well as outbound Google OAuth / `userinfo` / `cloudcode-pa` quota requests.
+   - [`apps/server/src/provider/claudeResetCredits.ts`](./apps/server/src/provider/claudeResetCredits.ts): Disabled background reading of `.credentials.json` and `~/.claude.json` for reset-credit probing.
+5. **Remote Upstream Manifest Fetch & Auto-Updates Disabled**
+   - [`apps/server/src/provider/ModelManifest.ts`](./apps/server/src/provider/ModelManifest.ts): Uses `BUNDLED_MODEL_MANIFEST` only; no background fetches to `raw.githubusercontent.com/pingdotgg/t3code/.../model-manifest.json`.
+   - [`apps/desktop/src/updates/DesktopUpdatePolicy.ts`](./apps/desktop/src/updates/DesktopUpdatePolicy.ts), [`apps/server/src/cloud/selfUpdate.ts`](./apps/server/src/cloud/selfUpdate.ts): Disabled upstream desktop and server self-updates so official telemetry-enabled releases cannot overwrite local builds.
+
+#### Build Locally / 本地编译
+
+```sh
+curl -fsSL https://vite.plus | bash
+vp i
+vp run build:desktop
+```
+
+---
+
+<details>
+<summary>Original Upstream README / 原上游说明</summary>
+
 <p align="center">
   <a href="https://t3.codes">
     <img src="./assets/prod/t3-black-web-icon-192x192.png" width="80" height="80" alt="T3 Code logo" />
@@ -119,3 +179,5 @@ If you fork, redistribute, or build on T3 Code's source code:
 Using our name, wordmark, logo, or branding in a way that suggests official status or affiliation is trademark infringement and unlawful. **Any project indicating or implying that it is an official version of T3 Code when it is not will be pursued to the full extent of the law.**
 
 See [TRADEMARK.md](./TRADEMARK.md) for the full trademark and branding policy.
+
+</details>
