@@ -24,7 +24,6 @@ import * as SqlClient from "effect/sql/SqlClient";
 import * as Threads from "../orchestration-v2/ThreadManagementService.ts";
 import * as Providers from "../provider/ProviderRegistry.ts";
 import * as Settings from "../serverSettings.ts";
-import * as Analytics from "../telemetry/AnalyticsService.ts";
 import { type ProviderDimensions, providerDimensions } from "../telemetry/ProviderDimensions.ts";
 import {
   FeedbackLimitError,
@@ -85,23 +84,18 @@ const TraceJson = Schema.NullOr(Schema.fromJsonString(FeedbackTrace));
 const encodeTrace = Schema.encodeEffect(TraceJson);
 const decodeTrace = Schema.decodeUnknownEffect(TraceJson);
 
-/** The mode rule: nothing while Off, and only approved reports while When I ask. */
+/** Agent feedback upload is permanently disabled in this private fork. */
 export const allowedBy = (
-  mode: AgentFeedbackMode,
-  userRequested: boolean,
-  source: FeedbackSource,
+  _mode: AgentFeedbackMode,
+  _userRequested: boolean,
+  _source: FeedbackSource,
 ): Effect.Effect<void, FeedbackOffError | FeedbackNotRequestedError> =>
-  mode === "off"
-    ? Effect.fail(new FeedbackOffError({}))
-    : mode === "on-request" && !userRequested
-      ? Effect.fail(new FeedbackNotRequestedError({ source }))
-      : Effect.void;
+  Effect.fail(new FeedbackOffError({}));
 
 const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
   const threads = yield* Threads.ThreadManagementService;
   const settings = yield* Settings.ServerSettingsService;
-  const analytics = yield* Analytics.AnalyticsService;
   const providers = yield* Providers.ProviderRegistry;
   // Serializes the limit checks with their writes. Held only after any settings wait, so an answer
   // stalled on the settings lock never holds up a card or an unprompted report.
@@ -197,34 +191,15 @@ const make = Effect.gen(function* () {
       );
   });
 
-  /** Sends a stored report as the `agent.feedback` event; false when telemetry refuses it. */
+  /** Delivery is disabled in this private fork so no feedback or conversation trace leaves the machine. */
   const deliver = Effect.fn("FeedbackStore.deliver")(function* (
     report: Omit<FeedbackReport, "sent">,
-    dimensions: Partial<ProviderDimensions>,
+    _dimensions: Partial<ProviderDimensions>,
   ) {
-    const { kind, subject, expected, actual, workaround, trace, userRequested, source } = report;
-    // A report links to no install. One that left without the user seeing it carries only its
-    // categories; the agent's text stays in the local copy.
-    const sent = yield* analytics.record(
-      "agent.feedback",
-      {
-        kind,
-        subject,
-        ...(userRequested ? { expected, actual, workaround } : {}),
-        trace,
-        userRequested,
-        source,
-        ...dimensions,
-      },
-      { anonymous: true },
+    yield* sql`UPDATE agent_feedback SET sent = 0 WHERE id = ${report.id}`.pipe(
+      Effect.mapError(storageError),
     );
-    if (!sent) {
-      // A failed clear leaves the report reading as sent, on purpose: uncertain reads as sent.
-      yield* sql`UPDATE agent_feedback SET sent = 0 WHERE id = ${report.id}`.pipe(
-        Effect.mapError(storageError),
-      );
-    }
-    return sent;
+    return false;
   });
 
   const store = Effect.fn("FeedbackStore.store")(function* ({

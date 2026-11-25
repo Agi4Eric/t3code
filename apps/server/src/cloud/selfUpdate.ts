@@ -45,12 +45,11 @@ import { runStagedServicePreflight } from "./servicePreflight.ts";
 import * as ServiceLauncherClient from "./serviceLauncherClient.ts";
 import { decodeServiceUnit, isExactServiceVersion } from "./serviceProtocol.ts";
 
-export function resolveServerSelfUpdateCapability(input: {
+export function resolveServerSelfUpdateCapability(_input: {
   readonly desktopManaged: boolean;
   readonly launcherManaged: boolean;
 }): ServerSelfUpdateCapability | null {
-  if (input.desktopManaged) return "desktop-managed" as const;
-  return input.launcherManaged ? ("boot-service" as const) : null;
+  return null;
 }
 
 export class ServerSelfUpdate extends Context.Service<

@@ -18,9 +18,6 @@ const GRANT_ID = /^[a-z0-9_-]{1,40}$/;
 const REQUEST_ID = /^[A-Za-z0-9_-]{1,64}$/;
 const COMPLETE_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
 
-const Credentials = Schema.Struct({
-  claudeAiOauth: Schema.optional(Schema.Struct({ accessToken: Schema.optional(Schema.String) })),
-});
 const Config = Schema.Struct({
   oauthAccount: Schema.optional(
     Schema.Struct({
@@ -44,9 +41,6 @@ const CedarEmber = Schema.Struct({
   eligible: Schema.Boolean,
   grants: Schema.optional(Schema.Array(Schema.Unknown)),
   next_grant_id: Schema.optional(Schema.NullOr(Schema.String)),
-});
-const UsageResponse = Schema.Struct({
-  cedar_ember: Schema.optional(Schema.NullOr(Schema.Unknown)),
 });
 const decodeCedarEmber = Schema.decodeUnknownOption(CedarEmber);
 const ClaimResponse = Schema.Struct({
@@ -191,14 +185,9 @@ const readJson = Effect.fn("claudeResetCredits.readJson")(function* <S extends S
   );
 });
 
-const readAccessToken = Effect.fn("claudeResetCredits.readAccessToken")(function* (
-  configDir: string,
-) {
-  if ((yield* HostProcess.Platform) === "darwin") return undefined;
-  const path = yield* Path.Path;
-  const credentials = yield* readJson(Credentials, path.join(configDir, ".credentials.json"));
-  return credentials.claudeAiOauth?.accessToken?.trim() || undefined;
-});
+const readAccessToken = Effect.fn("claudeResetCredits.readAccessToken")((_configDir: string) =>
+  Effect.succeed(undefined as string | undefined),
+);
 
 const withClaudeHeaders = (token: string, version: string) =>
   HttpClientRequest.setHeaders({
@@ -208,32 +197,13 @@ const withClaudeHeaders = (token: string, version: string) =>
   });
 
 export const readClaudeResetCredits = Effect.fn("readClaudeResetCredits")(
-  function* (configDir: string, version: string) {
-    const token = yield* readAccessToken(configDir);
-    if (!token) return undefined;
-    const client = yield* HttpClient.HttpClient;
-    const response = yield* client.execute(
-      HttpClientRequest.get(`${API_BASE}/api/oauth/usage`, {
-        urlParams: { cedar_ember: "1", skip_spend: "1" },
-      }).pipe(withClaudeHeaders(token, version)),
-    );
-    const body = yield* HttpClientResponse.schemaBodyJson(UsageResponse)(
-      yield* HttpClientResponse.filterStatusOk(response),
-    );
-    return claudeResetCreditsToContract(
-      body.cedar_ember,
-      DateTime.toEpochMillis(yield* DateTime.now),
-    );
-  },
-  Effect.timeout("10 seconds"),
-  Effect.orElseSucceed(() => undefined),
+  (_configDir: string, _version: string) =>
+    // Background Claude credential/quota probing is disabled in this private fork.
+    Effect.succeed(undefined as ServerProviderResetCredits | undefined),
 );
 
-export const readClaudeOauthAccount = (accountConfigPath: string) =>
-  readJson(Config, accountConfigPath).pipe(
-    Effect.map((config) => config.oauthAccount),
-    Effect.orElseSucceed(() => undefined),
-  );
+export const readClaudeOauthAccount = (_accountConfigPath: string) =>
+  Effect.succeed(undefined as typeof Config.Type.oauthAccount);
 
 export const readClaudeOrganizationId = (accountConfigPath: string) =>
   readClaudeOauthAccount(accountConfigPath).pipe(

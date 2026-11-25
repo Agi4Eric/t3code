@@ -5,11 +5,7 @@
  *
  * @module DesktopUpdatePolicy
  */
-import {
-  managedUpdatesMessage,
-  type ManagedPolicyDocument,
-  type ManagedUpdatesMode,
-} from "@t3tools/contracts";
+import { type ManagedPolicyDocument, type ManagedUpdatesMode } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -30,21 +26,14 @@ export class DesktopUpdatePolicy extends Context.Service<DesktopUpdatePolicy, Up
 ) {}
 
 export const unmanagedUpdatePolicy: UpdatePolicy = {
-  mode: "auto",
+  mode: "off",
   feedUrl: undefined,
-  allowNightly: true,
-  message: null,
+  allowNightly: false,
+  message: "Upstream auto-updates are disabled in this private fork.",
 };
 
-function resolveUpdatePolicy(document: ManagedPolicyDocument | undefined): UpdatePolicy {
-  const updates = document?.limits?.updates;
-  if (document === undefined || updates === undefined) return unmanagedUpdatePolicy;
-  return {
-    mode: updates.mode,
-    feedUrl: updates.feedUrl,
-    allowNightly: updates.allowNightly ?? true,
-    message: managedUpdatesMessage(document.organization),
-  };
+function resolveUpdatePolicy(_document: ManagedPolicyDocument | undefined): UpdatePolicy {
+  return unmanagedUpdatePolicy;
 }
 
 const { logInfo, logError } = DesktopObservability.makeComponentLogger("desktop-update-policy");
